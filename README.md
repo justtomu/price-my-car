@@ -10,7 +10,7 @@ AI-powered car pricing API using LLM for make/model extraction from car listings
 - 🔒 **Rate limiting**: Configurable rate limits per client
 - 🏗️ **Clean architecture**: Provider/Service/API layer separation
 - 🐳 **Docker ready**: Full docker-compose setup with Ollama and Redis
-- ✅ **Well tested**: 80%+ code coverage with unit and integration tests
+- ✅ **Well tested**: Unit tests with ~60% coverage (LLM/Redis integration code excluded)
 
 ## Quick Start
 

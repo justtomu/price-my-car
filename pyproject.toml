@@ -151,4 +151,4 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
 ]
-# fail_under = 80  # Enable for CI with full integration tests
+# fail_under = 55  # CI threshold set in .github/workflows/tests.yml
