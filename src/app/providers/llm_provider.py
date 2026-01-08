@@ -67,6 +67,8 @@ class LLMProvider(ABC):
         Clean up resources (HTTP clients, connections, etc.).
 
         Should be called during application shutdown.
-        Default implementation does nothing.
+        Default implementation does nothing - subclasses override if needed.
         """
-        pass
+        # Not abstract - default no-op implementation is intentional
+        # Subclasses override this only if they have resources to clean up
+        return None

@@ -17,7 +17,7 @@ from app.api.dependencies import (
     get_cache_service,
     get_metrics_service,
 )
-from app.logger import get_logger, get_request_id, set_request_id
+from app.logger import get_logger, set_request_id
 from app.schemas.llm import CachedResult
 from app.schemas.request import PriceCarRequest
 from app.schemas.response import ErrorResponse, HealthMetricsResponse, PriceCarResponse
@@ -131,7 +131,7 @@ async def price_car(
         agent_start = time.time()
         result = await agent_service.get_car_price(body.title, body.description)
         agent_duration_ms = (time.time() - agent_start) * 1000
-        
+
         await metrics_service.record_llm_latency(agent_duration_ms)
         await metrics_service.record_llm_success()
         await metrics_service.record_car_found(result.make)
@@ -176,7 +176,7 @@ async def price_car(
                 error="LLM request timeout",
                 request_id=request_id,
             ).model_dump(),
-        )
+        ) from e
 
     except LLMProviderError as e:
         await metrics_service.record_error()
@@ -188,7 +188,7 @@ async def price_car(
                 error="LLM service unavailable",
                 request_id=request_id,
             ).model_dump(),
-        )
+        ) from e
 
     except LLMExtractionError as e:
         await metrics_service.record_error()
@@ -200,7 +200,7 @@ async def price_car(
                 error="Failed to extract car info",
                 request_id=request_id,
             ).model_dump(),
-        )
+        ) from e
 
     except CarNotFoundError as e:
         await metrics_service.record_error()
@@ -212,7 +212,7 @@ async def price_car(
                 error="Car make/model not found",
                 request_id=request_id,
             ).model_dump(),
-        )
+        ) from e
 
     except Exception as e:
         await metrics_service.record_error()
@@ -226,7 +226,7 @@ async def price_car(
                 error="Internal service error",
                 request_id=request_id,
             ).model_dump(),
-        )
+        ) from e
 
 
 @router.get(

@@ -7,13 +7,8 @@ and graceful degradation.
 
 import random
 import time
-from typing import Any
 
 from app.logger import get_logger
-
-# Cleanup configuration
-CLEANUP_PROBABILITY = 0.01  # 1% chance to cleanup on each record operation
-MAX_METRICS_ENTRIES = 10000  # Maximum entries to keep in sorted sets
 from app.schemas.response import (
     CacheStats,
     CarStats,
@@ -26,6 +21,10 @@ from app.services.cache_service import CacheService
 from app.settings import Settings
 
 logger = get_logger("metrics_service")
+
+# Cleanup configuration
+CLEANUP_PROBABILITY = 0.01  # 1% chance to cleanup on each record operation
+MAX_METRICS_ENTRIES = 10000  # Maximum entries to keep in sorted sets
 
 
 class MetricsService:
@@ -232,7 +231,7 @@ class MetricsService:
             Dictionary with cleanup results per key
         """
         results: dict[str, int] = {}
-        
+
         for key in [self.RESPONSE_TIMES, self.LLM_LATENCIES]:
             try:
                 count = await self._cache.zcard(key)
@@ -256,12 +255,10 @@ class MetricsService:
                     extra={"key": key, "error": str(e)},
                 )
                 results[key] = -1
-        
+
         return results
 
-    async def _calculate_percentiles(
-        self, key: str
-    ) -> tuple[float, float, float]:
+    async def _calculate_percentiles(self, key: str) -> tuple[float, float, float]:
         """
         Calculate p50, p95, p99 percentiles from sorted set.
 
@@ -295,6 +292,7 @@ class MetricsService:
                 # For p=50, n=2: ceil(0.5*2)-1 = ceil(1)-1 = 0
                 # For p=99, n=2: ceil(0.99*2)-1 = ceil(1.98)-1 = 1
                 import math
+
                 idx = math.ceil(p / 100.0 * length) - 1
                 return max(0, min(idx, length - 1))
 
@@ -333,7 +331,7 @@ class MetricsService:
             values = await self._cache.mget(keys)
 
             makes: dict[str, int] = {}
-            for key, value in zip(keys, values):
+            for key, value in zip(keys, values, strict=False):
                 make = key.replace(self.CAR_MAKE_PREFIX, "")
                 count = int(value) if value else 0
                 makes[make.title()] = count
@@ -367,9 +365,7 @@ class MetricsService:
         cache_hits = await self._get_count(self.CACHE_HITS)
         cache_misses = await self._get_count(self.CACHE_MISSES)
         total_cache = cache_hits + cache_misses
-        hit_rate = (
-            round(cache_hits / total_cache * 100, 2) if total_cache > 0 else 0.0
-        )
+        hit_rate = round(cache_hits / total_cache * 100, 2) if total_cache > 0 else 0.0
 
         # LLM stats
         llm_total = await self._get_count(self.LLM_CALLS_TOTAL)

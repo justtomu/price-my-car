@@ -2,10 +2,12 @@
 Tests for utility functions.
 """
 
-import pytest
-
 from app.utils.helpers import generate_cache_key, generate_request_id
-from app.utils.validators import normalize_car_info, validate_car_make, validate_car_model
+from app.utils.validators import (
+    normalize_car_info,
+    validate_car_make,
+    validate_car_model,
+)
 
 
 class TestGenerateRequestId:

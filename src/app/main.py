@@ -5,12 +5,11 @@ FastAPI application with LLM-based car information extraction
 and pricing lookup functionality.
 """
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -20,7 +19,6 @@ from app.api.dependencies import init_services, shutdown_services
 from app.api.routes import router
 from app.logger import get_logger, setup_logging
 from app.settings import get_settings
-from app.utils.helpers import generate_request_id
 
 # Initialize logging
 setup_logging()

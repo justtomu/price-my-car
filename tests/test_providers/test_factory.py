@@ -2,8 +2,6 @@
 Tests for LLMProviderFactory.
 """
 
-import pytest
-
 from app.providers.factory import LLMProviderFactory
 from app.providers.ollama_provider import OllamaProvider
 from app.providers.openai_provider import OpenAIProvider

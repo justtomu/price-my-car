@@ -2,7 +2,6 @@
 Mock provider fixtures for testing.
 """
 
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from langchain_core.language_models.chat_models import BaseChatModel

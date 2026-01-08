@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from app.main import app
 from app.schemas.llm import CachedResult
@@ -58,27 +59,27 @@ class TestPriceCarRequestValidation:
 
     def test_missing_title_raises_error(self) -> None:
         """Test missing title raises validation error."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PriceCarRequest(description="Some description here")  # type: ignore
 
     def test_missing_description_raises_error(self) -> None:
         """Test missing description raises validation error."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PriceCarRequest(title="Some title")  # type: ignore
 
     def test_short_title_raises_error(self) -> None:
         """Test short title raises validation error."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PriceCarRequest(title="ab", description="Valid description here")
 
     def test_short_description_raises_error(self) -> None:
         """Test short description raises validation error."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PriceCarRequest(title="Valid title here", description="short")
 
     def test_title_max_length(self) -> None:
         """Test title max length validation."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PriceCarRequest(
                 title="x" * 501,
                 description="Valid description here",
@@ -86,7 +87,7 @@ class TestPriceCarRequestValidation:
 
     def test_description_max_length(self) -> None:
         """Test description max length validation."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PriceCarRequest(
                 title="Valid title here",
                 description="x" * 5001,
@@ -117,7 +118,7 @@ class TestResponseModels:
 
     def test_price_car_response_negative_price_fails(self) -> None:
         """Test that negative price fails validation."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PriceCarResponse(
                 make="Honda",
                 model="Accord",
@@ -131,11 +132,6 @@ class TestPriceCarEndpoint:
 
     def _create_mock_services(self):
         """Create mocked services for testing."""
-        from app.api.dependencies import (
-            get_agent_service,
-            get_cache_service,
-            get_metrics_service,
-        )
 
         mock_agent = MagicMock()
         mock_agent.get_car_price = AsyncMock(
@@ -312,9 +308,7 @@ class TestPriceCarEndpoint:
     def test_price_car_llm_timeout(self) -> None:
         """Test LLM timeout returns 504."""
         mock_agent, mock_cache, mock_metrics = self._create_mock_services()
-        mock_agent.get_car_price = AsyncMock(
-            side_effect=LLMTimeoutError("Timeout")
-        )
+        mock_agent.get_car_price = AsyncMock(side_effect=LLMTimeoutError("Timeout"))
 
         from app.api.dependencies import (
             get_agent_service,

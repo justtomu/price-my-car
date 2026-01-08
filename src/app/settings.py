@@ -146,14 +146,10 @@ class Settings(BaseSettings):
 
         # Validate required fields based on environment
         if self.environment == "production" and not self.openai_api_key:
-            raise ValueError(
-                "OPENAI_API_KEY is required when ENVIRONMENT=production"
-            )
+            raise ValueError("OPENAI_API_KEY is required when ENVIRONMENT=production")
 
         if self.environment == "development" and not self.ollama_base_url:
-            raise ValueError(
-                "OLLAMA_BASE_URL is required when ENVIRONMENT=development"
-            )
+            raise ValueError("OLLAMA_BASE_URL is required when ENVIRONMENT=development")
 
         return self
 

@@ -38,9 +38,7 @@ class TestMetricsService:
         return cache
 
     @pytest.fixture
-    def service(
-        self, mock_settings: Settings, mock_cache: MagicMock
-    ) -> MetricsService:
+    def service(self, mock_settings: Settings, mock_cache: MagicMock) -> MetricsService:
         """Create metrics service instance."""
         return MetricsService(mock_settings, mock_cache)
 

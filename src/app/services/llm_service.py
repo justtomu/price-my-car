@@ -94,17 +94,17 @@ class LLMService:
         chain = prompt | chat_model
 
         return chain
-    
+
     def _parse_response(self, response: Any) -> CarExtraction:
         """
         Parse LLM response with fallback for non-JSON responses.
-        
+
         Args:
             response: LLM response (AIMessage or string)
-            
+
         Returns:
             CarExtraction object
-            
+
         Raises:
             ValueError: If parsing fails
         """
@@ -113,26 +113,21 @@ class LLMService:
             text = response.content
         else:
             text = str(response)
-        
+
         # Try standard Pydantic parsing first
         try:
             return self._parser.parse(text)
         except Exception:
             pass
-        
+
         # Try fallback JSON extraction
         extracted = extract_json_from_text(text)
         if extracted:
-            return CarExtraction(
-                make=extracted["make"],
-                model=extracted["model"]
-            )
-        
+            return CarExtraction(make=extracted["make"], model=extracted["model"])
+
         raise ValueError(f"Could not parse response: {text[:200]}")
 
-    async def extract_car_info(
-        self, title: str, description: str
-    ) -> CarExtraction:
+    async def extract_car_info(self, title: str, description: str) -> CarExtraction:
         """
         Extract car make and model from listing.
 
@@ -188,7 +183,7 @@ class LLMService:
                     self._chain.ainvoke({"title": title, "description": description}),
                     timeout=self._settings.llm_timeout,
                 )
-                
+
                 # Parse response with fallback
                 result = self._parse_response(response)
 
@@ -207,7 +202,7 @@ class LLMService:
 
                 return result
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 duration_ms = (time.time() - start_time) * 1000
                 logger.warning(
                     "extraction_timeout",
@@ -239,8 +234,8 @@ class LLMService:
             # Apply exponential backoff before retry
             if attempt < self._settings.llm_max_retries:
                 backoff_seconds = min(
-                    BASE_BACKOFF_SECONDS * (BACKOFF_MULTIPLIER ** attempt),
-                    MAX_BACKOFF_SECONDS
+                    BASE_BACKOFF_SECONDS * (BACKOFF_MULTIPLIER**attempt),
+                    MAX_BACKOFF_SECONDS,
                 )
                 logger.info(
                     "extraction_retry",

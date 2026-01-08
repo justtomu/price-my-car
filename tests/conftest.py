@@ -73,7 +73,9 @@ def mock_cache_service() -> MagicMock:
 
 
 @pytest.fixture
-def mock_metrics_service(mock_settings: Settings, mock_cache_service: MagicMock) -> MetricsService:
+def mock_metrics_service(
+    mock_settings: Settings, mock_cache_service: MagicMock
+) -> MetricsService:
     """Create metrics service with mock cache."""
     return MetricsService(mock_settings, mock_cache_service)
 

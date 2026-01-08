@@ -5,7 +5,6 @@ Provides caching functionality with graceful degradation
 when Redis is unavailable.
 """
 
-import json
 from typing import Any
 
 import redis.asyncio as redis

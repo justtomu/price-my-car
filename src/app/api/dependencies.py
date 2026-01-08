@@ -21,12 +21,12 @@ from app.settings import Settings, get_settings
 class ServiceContainer:
     """
     Thread-safe container for service instances.
-    
+
     Encapsulates all service instances to avoid race conditions
     with global mutable variables. Uses a lock for thread-safe
     initialization and access.
     """
-    
+
     cache_service: CacheService | None = None
     metrics_service: MetricsService | None = None
     pricing_service: PricingService | None = None
@@ -34,18 +34,18 @@ class ServiceContainer:
     llm_provider: LLMProvider | None = None
     _initialized: bool = field(default=False, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
-    
+
     @property
     def is_initialized(self) -> bool:
         """Check if services are initialized (thread-safe)."""
         with self._lock:
             return self._initialized
-    
+
     def mark_initialized(self) -> None:
         """Mark container as initialized (thread-safe)."""
         with self._lock:
             self._initialized = True
-    
+
     def mark_shutdown(self) -> None:
         """Mark container as shutdown (thread-safe)."""
         with self._lock:
@@ -66,12 +66,12 @@ async def init_services() -> None:
     # Check if already initialized (thread-safe)
     if _container.is_initialized:
         return
-    
+
     with _container._lock:
         # Double-check after acquiring lock
         if _container._initialized:
             return
-        
+
         settings = get_settings()
 
         # Initialize cache service and connect to Redis
@@ -89,7 +89,7 @@ async def init_services() -> None:
 
         # Initialize agent service (uses LangChain tool calling)
         _container.agent_service = AgentService(settings, _container.llm_provider)
-        
+
         _container._initialized = True
 
 
@@ -110,7 +110,7 @@ async def shutdown_services() -> None:
         if _container.cache_service:
             await _container.cache_service.disconnect()
             _container.cache_service = None
-        
+
         _container.metrics_service = None
         _container.pricing_service = None
         _container.agent_service = None
