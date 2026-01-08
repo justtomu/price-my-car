@@ -5,6 +5,8 @@ Provides a hierarchy of exceptions for different error scenarios,
 enabling precise error handling and appropriate HTTP responses.
 """
 
+from typing import Any
+
 
 class PriceMyCarError(Exception):
     """
@@ -14,7 +16,7 @@ class PriceMyCarError(Exception):
     to enable catching all application-specific errors.
     """
 
-    def __init__(self, message: str, details: dict | None = None) -> None:
+    def __init__(self, message: str, details: dict[str, Any] | None = None) -> None:
         """
         Initialize base exception.
 

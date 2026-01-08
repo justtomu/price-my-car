@@ -5,7 +5,7 @@ Tests cover request validation, response models, and endpoint behavior
 with mocked services.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -24,12 +24,10 @@ class TestHealthEndpoints:
     def test_health_check_returns_ok(self) -> None:
         """Test basic health check endpoint returns status ok."""
         with TestClient(app, raise_server_exceptions=False) as client:
-            # Mock the services to avoid actual initialization
-            with patch("app.api.dependencies._cache_service") as mock_cache:
-                mock_cache.health_check = AsyncMock(return_value=True)
-                response = client.get("/health")
-                assert response.status_code == 200
-                assert response.json() == {"status": "ok"}
+            # Health endpoint is simple and doesn't require mocking
+            response = client.get("/health")
+            assert response.status_code == 200
+            assert response.json() == {"status": "ok"}
 
 
 class TestRootEndpoint:

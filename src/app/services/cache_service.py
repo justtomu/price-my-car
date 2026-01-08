@@ -40,7 +40,7 @@ class CacheService:
             settings: Application settings with Redis configuration
         """
         self._settings = settings
-        self._redis: redis.Redis | None = None
+        self._redis: redis.Redis[str] | None = None
 
     async def connect(self) -> None:
         """
@@ -321,3 +321,44 @@ class CacheService:
             return await self._redis.mget(keys)
         except RedisError:
             return []
+
+    async def zcard(self, key: str) -> int:
+        """
+        Get the number of elements in a sorted set.
+
+        Args:
+            key: Sorted set key
+
+        Returns:
+            Number of elements, 0 on error
+        """
+        if not self._redis:
+            return 0
+
+        try:
+            return await self._redis.zcard(key)
+        except RedisError:
+            return 0
+
+    async def zremrangebyrank(self, key: str, start: int, stop: int) -> int:
+        """
+        Remove elements from sorted set by rank (index).
+
+        Removes all elements with rank between start and stop (inclusive).
+        Rank 0 is the element with the lowest score.
+
+        Args:
+            key: Sorted set key
+            start: Start rank (inclusive)
+            stop: Stop rank (inclusive)
+
+        Returns:
+            Number of elements removed, 0 on error
+        """
+        if not self._redis:
+            return 0
+
+        try:
+            return await self._redis.zremrangebyrank(key, start, stop)
+        except RedisError:
+            return 0

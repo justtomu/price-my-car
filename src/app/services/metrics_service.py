@@ -5,10 +5,15 @@ Provides Redis-based metrics collection with atomic operations
 and graceful degradation.
 """
 
+import random
 import time
 from typing import Any
 
 from app.logger import get_logger
+
+# Cleanup configuration
+CLEANUP_PROBABILITY = 0.01  # 1% chance to cleanup on each record operation
+MAX_METRICS_ENTRIES = 10000  # Maximum entries to keep in sorted sets
 from app.schemas.response import (
     CacheStats,
     CarStats,
@@ -146,6 +151,8 @@ class MetricsService:
         """
         Record response time for percentile calculation.
 
+        Probabilistically triggers cleanup of old entries.
+
         Args:
             duration_ms: Response time in milliseconds
         """
@@ -156,10 +163,14 @@ class MetricsService:
             member,
             ttl=self._retention_seconds,
         )
+        # Probabilistic cleanup to avoid checking on every request
+        await self._maybe_cleanup_sorted_set(self.RESPONSE_TIMES)
 
     async def record_llm_latency(self, duration_ms: float) -> None:
         """
         Record LLM latency for percentile calculation.
+
+        Probabilistically triggers cleanup of old entries.
 
         Args:
             duration_ms: LLM call duration in milliseconds
@@ -171,12 +182,91 @@ class MetricsService:
             member,
             ttl=self._retention_seconds,
         )
+        # Probabilistic cleanup to avoid checking on every request
+        await self._maybe_cleanup_sorted_set(self.LLM_LATENCIES)
+
+    async def _maybe_cleanup_sorted_set(self, key: str) -> None:
+        """
+        Probabilistically clean up old entries from sorted set.
+
+        Removes oldest entries when set exceeds MAX_METRICS_ENTRIES.
+        Only runs with CLEANUP_PROBABILITY chance to avoid overhead.
+
+        Args:
+            key: Sorted set key to clean up
+        """
+        # Only run cleanup with configured probability
+        if random.random() > CLEANUP_PROBABILITY:
+            return
+
+        try:
+            count = await self._cache.zcard(key)
+            if count > MAX_METRICS_ENTRIES:
+                # Remove oldest entries (lowest ranks = oldest timestamps in member)
+                # Keep the most recent MAX_METRICS_ENTRIES entries
+                to_remove = count - MAX_METRICS_ENTRIES
+                removed = await self._cache.zremrangebyrank(key, 0, to_remove - 1)
+                if removed > 0:
+                    logger.debug(
+                        "metrics_cleanup",
+                        extra={
+                            "key": key,
+                            "removed": removed,
+                            "remaining": count - removed,
+                        },
+                    )
+        except Exception as e:
+            logger.debug(
+                "metrics_cleanup_failed",
+                extra={"key": key, "error": str(e)},
+            )
+
+    async def cleanup_old_metrics(self) -> dict[str, int]:
+        """
+        Force cleanup of old metrics entries.
+
+        Can be called manually or from a scheduled task.
+        Removes entries exceeding MAX_METRICS_ENTRIES from all sorted sets.
+
+        Returns:
+            Dictionary with cleanup results per key
+        """
+        results: dict[str, int] = {}
+        
+        for key in [self.RESPONSE_TIMES, self.LLM_LATENCIES]:
+            try:
+                count = await self._cache.zcard(key)
+                if count > MAX_METRICS_ENTRIES:
+                    to_remove = count - MAX_METRICS_ENTRIES
+                    removed = await self._cache.zremrangebyrank(key, 0, to_remove - 1)
+                    results[key] = removed
+                    logger.info(
+                        "metrics_cleanup_forced",
+                        extra={
+                            "key": key,
+                            "removed": removed,
+                            "remaining": count - removed,
+                        },
+                    )
+                else:
+                    results[key] = 0
+            except Exception as e:
+                logger.warning(
+                    "metrics_cleanup_forced_failed",
+                    extra={"key": key, "error": str(e)},
+                )
+                results[key] = -1
+        
+        return results
 
     async def _calculate_percentiles(
         self, key: str
     ) -> tuple[float, float, float]:
         """
         Calculate p50, p95, p99 percentiles from sorted set.
+
+        Uses nearest-rank method for percentile calculation.
+        Handles edge cases where n=1 or very small datasets.
 
         Args:
             key: Sorted set key
@@ -196,13 +286,25 @@ class MetricsService:
             if n == 0:
                 return 0.0, 0.0, 0.0
 
-            p50_idx = int(n * 0.50) - 1
-            p95_idx = int(n * 0.95) - 1
-            p99_idx = int(n * 0.99) - 1
+            # Use nearest-rank method: percentile index = ceil(P/100 * N) - 1
+            # This ensures index is always in valid range [0, n-1]
+            def percentile_index(p: float, length: int) -> int:
+                """Calculate percentile index using nearest-rank method."""
+                if length == 1:
+                    return 0
+                # For p=50, n=2: ceil(0.5*2)-1 = ceil(1)-1 = 0
+                # For p=99, n=2: ceil(0.99*2)-1 = ceil(1.98)-1 = 1
+                import math
+                idx = math.ceil(p / 100.0 * length) - 1
+                return max(0, min(idx, length - 1))
 
-            p50 = values[max(0, p50_idx)]
-            p95 = values[max(0, p95_idx)]
-            p99 = values[max(0, p99_idx)]
+            p50_idx = percentile_index(50, n)
+            p95_idx = percentile_index(95, n)
+            p99_idx = percentile_index(99, n)
+
+            p50 = values[p50_idx]
+            p95 = values[p95_idx]
+            p99 = values[p99_idx]
 
             return round(p50, 2), round(p95, 2), round(p99, 2)
         except Exception:

@@ -19,7 +19,7 @@ from app.settings import get_settings
 request_id_ctx: ContextVar[str | None] = ContextVar("request_id", default=None)
 
 
-class CustomJsonFormatter(jsonlogger.JsonFormatter):
+class CustomJsonFormatter(jsonlogger.JsonFormatter):  # type: ignore[name-defined, misc]
     """
     Custom JSON formatter that adds standard fields to all log entries.
 

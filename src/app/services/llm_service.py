@@ -24,6 +24,11 @@ from app.utils.helpers import extract_json_from_text
 
 logger = get_logger("llm_service")
 
+# Exponential backoff configuration
+BASE_BACKOFF_SECONDS = 1.0
+MAX_BACKOFF_SECONDS = 10.0
+BACKOFF_MULTIPLIER = 2.0
+
 # Extraction prompt template - optimized for llama3
 EXTRACTION_PROMPT = """Extract the car make and model from this listing. Respond ONLY with JSON, no explanation.
 
@@ -65,8 +70,11 @@ class LLMService:
         """
         self._settings = settings
         self._provider = provider
-        self._parser = PydanticOutputParser(pydantic_object=CarExtraction)
+        self._parser: PydanticOutputParser[CarExtraction] = PydanticOutputParser(
+            pydantic_object=CarExtraction
+        )
         self._chain: Any = None
+        self._chain_lock = asyncio.Lock()  # Async lock for thread-safe chain init
 
     def _build_chain(self) -> Any:
         """
@@ -155,21 +163,24 @@ class LLMService:
         start_time = time.time()
         last_error: Exception | None = None
 
-        # Build chain lazily
+        # Build chain lazily with lock to prevent race conditions
         if self._chain is None:
-            try:
-                self._chain = self._build_chain()
-            except Exception as e:
-                logger.error(
-                    "chain_build_failed",
-                    extra={"error": str(e)},
-                )
-                raise LLMProviderError(
-                    f"Failed to build LLM chain: {e}",
-                    details={"provider": self._provider.provider_name},
-                ) from e
+            async with self._chain_lock:
+                # Double-check after acquiring lock
+                if self._chain is None:
+                    try:
+                        self._chain = self._build_chain()
+                    except Exception as e:
+                        logger.error(
+                            "chain_build_failed",
+                            extra={"error": str(e)},
+                        )
+                        raise LLMProviderError(
+                            f"Failed to build LLM chain: {e}",
+                            details={"provider": self._provider.provider_name},
+                        ) from e
 
-        # Retry loop
+        # Retry loop with exponential backoff
         for attempt in range(self._settings.llm_max_retries + 1):
             try:
                 # Execute with timeout
@@ -225,15 +236,21 @@ class LLMService:
                 )
                 last_error = e
 
-            # Log retry if not last attempt
+            # Apply exponential backoff before retry
             if attempt < self._settings.llm_max_retries:
+                backoff_seconds = min(
+                    BASE_BACKOFF_SECONDS * (BACKOFF_MULTIPLIER ** attempt),
+                    MAX_BACKOFF_SECONDS
+                )
                 logger.info(
                     "extraction_retry",
                     extra={
                         "attempt": attempt + 2,
                         "max_retries": self._settings.llm_max_retries,
+                        "backoff_seconds": round(backoff_seconds, 2),
                     },
                 )
+                await asyncio.sleep(backoff_seconds)
 
         # All retries exhausted
         duration_ms = (time.time() - start_time) * 1000

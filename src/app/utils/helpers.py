@@ -65,7 +65,7 @@ def extract_json_from_text(text: str) -> dict[str, str] | None:
 
     for match in matches:
         try:
-            data = json.loads(match)
+            data: dict[str, str] = json.loads(match)
             if "make" in data and "model" in data:
                 return data
         except json.JSONDecodeError:

@@ -27,6 +27,11 @@ from app.utils.helpers import extract_json_from_text
 
 logger = get_logger("agent_service")
 
+# Exponential backoff configuration
+BASE_BACKOFF_SECONDS = 1.0
+MAX_BACKOFF_SECONDS = 10.0
+BACKOFF_MULTIPLIER = 2.0
+
 
 @dataclass
 class AgentResult:
@@ -81,6 +86,7 @@ class AgentService:
         self._settings = settings
         self._provider = provider
         self._chain: Any = None
+        self._chain_lock = asyncio.Lock()  # Async lock for thread-safe chain init
     
     def _build_chain(self) -> Any:
         """
@@ -93,7 +99,7 @@ class AgentService:
         prompt = ChatPromptTemplate.from_template(EXTRACTION_PROMPT)
         return prompt | chat_model
     
-    def _parse_extraction(self, response: Any) -> dict:
+    def _parse_extraction(self, response: Any) -> dict[str, str]:
         """
         Parse LLM response to extract make/model.
         
@@ -150,18 +156,21 @@ class AgentService:
         start_time = time.time()
         last_error: Exception | None = None
         
-        # Build chain lazily
+        # Build chain lazily with lock to prevent race conditions
         if self._chain is None:
-            try:
-                self._chain = self._build_chain()
-            except Exception as e:
-                logger.error("agent_build_failed", extra={"error": str(e)})
-                raise LLMProviderError(
-                    f"Failed to build chain: {e}",
-                    details={"provider": self._provider.provider_name}
-                ) from e
+            async with self._chain_lock:
+                # Double-check after acquiring lock
+                if self._chain is None:
+                    try:
+                        self._chain = self._build_chain()
+                    except Exception as e:
+                        logger.error("agent_build_failed", extra={"error": str(e)})
+                        raise LLMProviderError(
+                            f"Failed to build chain: {e}",
+                            details={"provider": self._provider.provider_name}
+                        ) from e
         
-        # Retry loop for extraction
+        # Retry loop for extraction with exponential backoff
         for attempt in range(self._settings.llm_max_retries + 1):
             try:
                 # Step 1: Extract make/model using LLM
@@ -236,8 +245,20 @@ class AgentService:
                 )
                 last_error = e
             
+            # Apply exponential backoff before retry
             if attempt < self._settings.llm_max_retries:
-                logger.info("agent_retry", extra={"attempt": attempt + 2})
+                backoff_seconds = min(
+                    BASE_BACKOFF_SECONDS * (BACKOFF_MULTIPLIER ** attempt),
+                    MAX_BACKOFF_SECONDS
+                )
+                logger.info(
+                    "agent_retry",
+                    extra={
+                        "attempt": attempt + 2,
+                        "backoff_seconds": round(backoff_seconds, 2),
+                    }
+                )
+                await asyncio.sleep(backoff_seconds)
         
         # All retries exhausted
         duration_ms = (time.time() - start_time) * 1000
