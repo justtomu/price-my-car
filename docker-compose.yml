@@ -1,0 +1,108 @@
+# Price My Car API - Docker Compose for Local Development
+# 
+# Services:
+#   - app: FastAPI application
+#   - redis: Cache and metrics storage
+#   - ollama: Local LLM for development
+#
+# Usage:
+#   docker-compose up -d
+#   docker-compose logs -f app
+#   docker-compose down
+
+services:
+  # FastAPI Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: price-my-car-app
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - LLM_MODEL=llama3
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - REDIS_URL=redis://redis:6379
+      - LOG_LEVEL=DEBUG
+      - CACHE_TTL=3600
+      - LLM_TIMEOUT=30
+      - LLM_MAX_RETRIES=2
+      - STATS_RETENTION_DAYS=7
+      - RATE_LIMIT_PER_MINUTE=100
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - price-my-car-network
+
+  # Redis - Cache and Metrics Storage
+  redis:
+    image: redis:7-alpine
+    container_name: price-my-car-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - price-my-car-network
+
+  # Ollama - Local LLM for Development
+  ollama:
+    image: ollama/ollama:latest
+    container_name: price-my-car-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    # Pull llama3 model on first startup
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        /bin/ollama serve &
+        sleep 5
+        /bin/ollama pull llama3
+        wait
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:11434/api/tags || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+    networks:
+      - price-my-car-network
+    deploy:
+      resources:
+        reservations:
+          memory: 4G
+
+volumes:
+  redis-data:
+    driver: local
+  ollama-data:
+    driver: local
+
+networks:
+  price-my-car-network:
+    driver: bridge
