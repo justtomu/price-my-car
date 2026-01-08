@@ -110,10 +110,10 @@ class Settings(BaseSettings):
 
     # CORS Configuration
     # NOTE: In production, set explicit origins instead of ["*"]
-    # Example: ["https://myapp.com", "https://admin.myapp.com"]
-    cors_origins: list[str] = Field(
-        default=["http://localhost:3000", "http://localhost:8080"],
-        description="Allowed CORS origins (set explicit origins in production)",
+    # Example: "https://myapp.com,https://admin.myapp.com" or "*"
+    cors_origins: str = Field(
+        default="http://localhost:3000,http://localhost:8080",
+        description="Allowed CORS origins (comma-separated string or '*' for all)",
     )
     cors_allow_credentials: bool = Field(
         default=False,
@@ -162,6 +162,13 @@ class Settings(BaseSettings):
     def is_development(self) -> bool:
         """Check if running in development environment."""
         return self.environment == "development"
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Get CORS origins as a list."""
+        if not self.cors_origins:
+            return ["*"]
+        return [origin.strip() for origin in self.cors_origins.split(",")]
 
 
 @lru_cache
