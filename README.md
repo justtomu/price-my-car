@@ -24,7 +24,7 @@ AI-powered car pricing API using LLM for make/model extraction from car listings
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/price-my-car.git
+git clone https://github.com/justtomu/price-my-car.git
 cd price-my-car
 
 # Create virtual environment and install dependencies
